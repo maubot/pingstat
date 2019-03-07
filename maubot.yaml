@@ -1,0 +1,11 @@
+maubot: 0.1.0
+id: xyz.maubot.pingstat
+version: 0.1.0
+license: AGPL-3.0-or-later
+modules:
+- pingstat
+main_class: PingStatBot
+extra_files:
+- stats.html.j2
+database: true
+webapp: true

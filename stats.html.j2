@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Ping Stats</title>
+    <meta charset="UTF-8">
+    <link href="https://fonts.googleapis.com/css?family=Raleway:300,400,700"
+          rel="stylesheet" type="text/css">
+    <meta http-equiv="refresh" content="20"/>
+    <style>
+        body {
+            color: #212121;
+
+            font-family: "Raleway", sans-serif;
+            background-color: #FEFEFE;
+        }
+
+        table, td, tr {
+            border-spacing: 0;
+        }
+
+        th, td {
+            padding: 6px;
+        }
+
+        thead > tr, tr:nth-child(even) {
+            background-color: #EAEAEA;
+        }
+    </style>
+</head>
+<body>
+    <table>
+        <thead>
+            <tr>
+                <th>Server</th>
+                <th>Average</th>
+                {% for server in pongservers %}
+                    <th>{{ server }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for server, pings in pongs.items() %}
+                <tr>
+                    <th>{{ server }}</th>
+                    <td>{{ prettify_diff(pings.average) }}</td>
+                    {% for pongserver in pongservers %}
+                        <td>
+                            {% if pongserver in pings.servers %}
+                                {{ prettify_diff(pings.servers[pongserver]) }}
+                            {% endif %}
+                        </td>
+                    {% endfor %}
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <pre><code>{{ raw }}</code></pre>
+</body>
+</html>
