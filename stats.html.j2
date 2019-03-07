@@ -22,7 +22,7 @@
             padding: 6px;
         }
 
-        thead > tr, tr:nth-child(even) {
+        tbody > tr:nth-child(odd) {
             background-color: #EAEAEA;
         }
     </style>
@@ -31,8 +31,11 @@
     <table>
         <thead>
             <tr>
-                <th>Server</th>
-                <th>Average</th>
+                <th rowspan="2">Ping server</th>
+                <th rowspan="2">Average</th>
+                <th colspan="{{ pongservers|length }}">Pong server</th>
+            </tr>
+            <tr>
                 {% for server in pongservers %}
                     <th>{{ server }}</th>
                 {% endfor %}
