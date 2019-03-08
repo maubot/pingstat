@@ -173,8 +173,13 @@ class PingStatBot(Plugin):
         except KeyError:
             return web.Response(status=400,
                                 text="Room ID query param missing\n" + str(request.rel_url))
+        try:
+            max_age = int(request.query["max_age"]) * 1000
+        except (KeyError, ValueError):
+            max_age = 7 * 24 * 60 * 60 * 1000
         return web.Response(status=200, content_type="application/json",
-                            text=json.dumps([pong._asdict() for pong in self.iter_pongs(room_id)]))
+                            text=json.dumps([pong._asdict() for pong in
+                                             self.iter_pongs(room_id, max_age=max_age)]))
 
     async def stats_json(self, request: web.Request) -> web.Response:
         self.log.info(str(request.rel_url))
