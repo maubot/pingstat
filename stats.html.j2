@@ -25,6 +25,18 @@
         tbody > tr:nth-child(odd) {
             background-color: #EAEAEA;
         }
+
+        tbody > tr:nth-child(1) {
+            background-color: gold;
+        }
+
+        tbody > tr:nth-child(2) {
+            background-color: silver;
+        }
+
+        tbody > tr:nth-child(3) {
+            background-color: #CD7F32;
+        }
     </style>
 </head>
 <body>
@@ -32,8 +44,10 @@
         <thead>
             <tr>
                 <th rowspan="2">Ping server</th>
-                <th rowspan="2">Average</th>
-                <th colspan="{{ pongservers|length }}">Pong server</th>
+                <th rowspan="2">Median</th>
+                <th rowspan="2">Mean</th>
+                <th rowspan="2">N</th>
+                <th colspan="{{ pongservers|length }}">Pong server (mean)</th>
             </tr>
             <tr>
                 {% for server in pongservers %}
@@ -45,14 +59,13 @@
             {% for server, ping_server_data in pings.items() %}
                 <tr>
                     <th>{{ server }}</th>
-                    <td>
-                        {{ prettify_diff(ping_server_data.average) }}
-                        <sup>{{ ping_server_data.pings|length }}</sup>
-                    </td>
+                    <td>{{ prettify_diff(ping_server_data.median) }}</td>
+                    <td>{{ prettify_diff(ping_server_data.mean) }}</td>
+                    <td>{{ ping_server_data.pings|length }}</td>
                     {% for pongserver in pongservers %}
                         <td>
                             {% if pongserver in ping_server_data.pongs %}
-                                {{ prettify_diff(ping_server_data.pongs[pongserver].average) }}
+                                {{ prettify_diff(ping_server_data.pongs[pongserver].mean) }}
                                 <sup>{{ ping_server_data.pongs[pongserver].diffs|length }}</sup>
                             {% endif %}
                         </td>

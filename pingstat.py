@@ -13,8 +13,9 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Tuple, Iterable, NamedTuple, Union, Dict, Optional
+from typing import Tuple, Iterable, NamedTuple, Optional
 from pkg_resources import resource_string
+from statistics import median
 from aiohttp import web
 from time import time
 import json
@@ -109,19 +110,24 @@ class PingStatBot(Plugin):
             ping_server["pings"] = list(ping_server["pings"])
             total_sum = 0
             total_len = 0
+            diffs = []
             for pong_server in ping_server["pongs"].values():
                 total_sum += pong_server["sum"]
                 total_len += len(pong_server["diffs"])
-                pong_server["average"] = pong_server["sum"] / len(pong_server["diffs"])
+                pong_server["mean"] = pong_server["sum"] / len(pong_server["diffs"])
+                server_diffs = pong_server["diffs"].values()
+                pong_server["median"] = median(server_diffs)
+                diffs += server_diffs
                 del pong_server["sum"]
-            ping_server["average"] = total_sum / total_len
+            ping_server["mean"] = total_sum / total_len
+            ping_server["median"] = median(diffs)
 
-        data = dict(sorted(data.items(), key=lambda kv: kv[1]["average"]))
+        data = dict(sorted(data.items(), key=lambda kv: kv[1]["median"]))
         return {
             "pings": data,
-            "average": (sum(ping_server["average"] for ping_server in data.values()) / len(data)
-                        if len(data) > 0 else 0),
-            "pongservers": list(pongservers)
+            "mean": (sum(ping_server["mean"] for ping_server in data.values()) / len(data)
+                     if len(data) > 0 else 0),
+            "pongservers": sorted(list(pongservers))
         }
 
     @staticmethod
