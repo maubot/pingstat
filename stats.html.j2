@@ -47,13 +47,13 @@
                     <th>{{ server }}</th>
                     <td>
                         {{ prettify_diff(ping_server_data.average) }}
-                        <sup>{{ ping_server_data.count }}</sup>
+                        <sup>{{ ping_server_data.pings|length }}</sup>
                     </td>
                     {% for pongserver in pongservers %}
                         <td>
-                            {% if pongserver in ping_server_data.servers %}
-                                {{ prettify_diff(ping_server_data.servers[pongserver].average) }}
-                                <sup>{{ ping_server_data.servers[pongserver].count }}</sup>
+                            {% if pongserver in ping_server_data.pongs %}
+                                {{ prettify_diff(ping_server_data.pongs[pongserver].average) }}
+                                <sup>{{ ping_server_data.pongs[pongserver].diffs|length }}</sup>
                             {% endif %}
                         </td>
                     {% endfor %}
