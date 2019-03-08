@@ -42,14 +42,18 @@
             </tr>
         </thead>
         <tbody>
-            {% for server, pings in pongs.items() %}
+            {% for server, ping_server_data in pings.items() %}
                 <tr>
                     <th>{{ server }}</th>
-                    <td>{{ prettify_diff(pings.average) }}</td>
+                    <td>
+                        {{ prettify_diff(ping_server_data.average) }}
+                        <sup>{{ ping_server_data.count }}</sup>
+                    </td>
                     {% for pongserver in pongservers %}
                         <td>
-                            {% if pongserver in pings.servers %}
-                                {{ prettify_diff(pings.servers[pongserver]) }}
+                            {% if pongserver in ping_server_data.servers %}
+                                {{ prettify_diff(ping_server_data.servers[pongserver].average) }}
+                                <sup>{{ ping_server_data.servers[pongserver].count }}</sup>
                             {% endif %}
                         </td>
                     {% endfor %}

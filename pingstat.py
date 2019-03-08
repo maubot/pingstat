@@ -93,37 +93,29 @@ class PingStatBot(Plugin):
         await evt.mark_read()
 
     def get_room_data(self, room_id: RoomID) -> dict:
-        all_pings: Dict[str, Union[
-            Dict[str, Union[Dict[str, Union[Dict[str, float], float]], float]], float]] = {}
-        for pong in self.iter_pongs(room_id):
-            all_pings.setdefault(pong.ping_server, {}) \
-                .setdefault("pings", {}) \
-                .setdefault(pong.ping_id, {})[pong.pong_server] = pong.receive_diff
-        average_average_sum = 0
+        data = {}
         pongservers = set()
-        for ping_server in all_pings.values():
-            average_sum = 0
-            sum_by_server = {}
-            count_by_server = {}
-            for ping in ping_server["pings"].values():
-                average = (max(ping.values()) / len(ping))
-                for server, diff in ping.items():
-                    pongservers.add(server)
-                    sum_by_server[server] = sum_by_server.setdefault(server, 0) + diff
-                    count_by_server[server] = count_by_server.setdefault(server, 0) + 1
-                ping["__average__"] = average
-                average_sum += average
-            ping_server["servers"] = {}
-            for server, sum in sum_by_server.items():
-                ping_server["servers"][server] = sum / count_by_server[server]
-            average_average = average_sum / len(all_pings)
-            ping_server["average"] = average_average
-            average_average_sum += average_average
-        all_pings = dict(sorted(all_pings.items(), key=lambda kv: kv[1]["average"]))
-        all_average = average_average_sum / len(all_pings) if len(all_pings) > 0 else 0
+        for pong in self.iter_pongs(room_id):
+            pongservers.add(pong.pong_server)
+            ping_server_data = data.setdefault(pong.ping_server,
+                                               {"sum": 0, "count": 0, "servers": {}})
+            ping_server_data["sum"] += pong.receive_diff
+            ping_server_data["count"] += 1
+            pong_server_data = ping_server_data["servers"].setdefault(pong.pong_server,
+                                                                      {"sum": 0, "count": 0})
+            pong_server_data["sum"] += pong.receive_diff
+            pong_server_data["count"] += 1
+
+        for ping_server in data.values():
+            ping_server["average"] = ping_server["sum"] / ping_server["count"]
+            for pong_server in ping_server["servers"].values():
+                pong_server["average"] = pong_server["sum"] / pong_server["count"]
+
+        data = dict(sorted(data.items(), key=lambda kv: kv[1]["average"]))
         return {
-            "pongs": all_pings,
-            "average": all_average,
+            "pings": data,
+            "average": (sum(ping_server["average"] for ping_server in data.values()) / len(data)
+                        if len(data) > 0 else 0),
             "pongservers": list(pongservers)
         }
 
