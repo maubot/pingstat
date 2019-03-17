@@ -43,6 +43,7 @@
     <table>
         <thead>
             <tr>
+                <th rowspan="2">#</th>
                 <th rowspan="2">Ping server</th>
                 <th rowspan="2">Median</th>
                 <th rowspan="2">Mean</th>
@@ -58,6 +59,7 @@
         <tbody>
             {% for server, ping_server_data in pings.items() %}
                 <tr>
+                    <th>{{ ping_server_data.n }}</th>
                     <th>{{ server }}</th>
                     <td>{{ prettify_diff(ping_server_data.median) }}</td>
                     <td>{{ prettify_diff(ping_server_data.mean) }}</td>

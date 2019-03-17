@@ -163,6 +163,10 @@ class PingStatBot(Plugin):
             return web.Response(status=400,
                                 text="Room ID query param missing\n" + str(request.rel_url))
         data = self.get_room_data(room_id)
+        n = 1
+        for ping in data["pings"].values():
+            ping["n"] = n
+            n += 1
         return web.Response(status=200, content_type="text/html",
                             text=self.stats_tpl.render(**data, prettify_diff=self.prettify_diff))
 
