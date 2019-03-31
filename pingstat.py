@@ -82,10 +82,10 @@ class PingStatBot(Plugin):
             ping = pong_data["ping"]
             to = evt.sender.split(":", 1)[1]
         except KeyError:
-            self.log.warn(f"{evt.event_id} from {evt.sender} had invalid pong data!")
+            self.log.warning(f"{evt.event_id} from {evt.sender} had invalid pong data!")
             return
         except IndexError:
-            self.log.warn(f"{evt.event_id} from {evt.sender} had an invalid sender ID!")
+            self.log.warning(f"{evt.event_id} from {evt.sender} had an invalid sender ID!")
             return
 
         pong = Pong(room_id=evt.room_id, ping_id=ping, pong_server=to, ping_server=server,
@@ -156,7 +156,6 @@ class PingStatBot(Plugin):
                 f"{cls.plural(minutes, 'minute')} and {cls.plural(seconds, 'second')}")
 
     async def stats(self, request: web.Request) -> web.Response:
-        self.log.info(str(request.rel_url))
         try:
             room_id = request.query["room_id"]
         except KeyError:
@@ -171,7 +170,6 @@ class PingStatBot(Plugin):
                             text=self.stats_tpl.render(**data, prettify_diff=self.prettify_diff))
 
     async def stats_raw_json(self, request: web.Request) -> web.Response:
-        self.log.info(str(request.rel_url))
         try:
             room_id = request.query["room_id"]
         except KeyError:
@@ -186,7 +184,6 @@ class PingStatBot(Plugin):
                                              self.iter_pongs(room_id, max_age=max_age)]))
 
     async def stats_json(self, request: web.Request) -> web.Response:
-        self.log.info(str(request.rel_url))
         try:
             room_id = request.query["room_id"]
         except KeyError:
