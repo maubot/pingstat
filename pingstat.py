@@ -52,10 +52,6 @@ class PingStatBot(Plugin):
         self.webapp.add_get("/stats.raw.json", self.stats_raw_json)
         self.stats_tpl = Template(resource_string("pingstat", "stats.html.j2").decode("utf-8"))
 
-    async def stop(self):
-        await super().stop()
-        self.webapp.clear()
-
     def save_pong(self, pong: Pong) -> None:
         self.database.execute(self.pong.insert().values(
             room_id=pong.room_id, ping_id=pong.ping_id, pong_server=pong.pong_server,
