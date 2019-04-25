@@ -26,15 +26,15 @@ from jinja2 import Template
 from mautrix.types import MessageType, RoomID, EventID
 
 from maubot import Plugin, MessageEvent
-from maubot.handlers import command
+from maubot.handlers import command, web
 
 Pong = NamedTuple("Pong", room_id=RoomID, ping_id=EventID, pong_server=str, ping_server=str,
                   receive_diff=int, pong_timestamp=int)
 
 
 class PingStatBot(Plugin):
+    stats_tpl: Template = Template(resource_string("pingstat", "stats.html.j2").decode("utf-8"))
     pong: Table
-    stats_tpl: Template
 
     async def start(self):
         await super().start()
@@ -47,10 +47,6 @@ class PingStatBot(Plugin):
                           Column("receive_diff", Integer),
                           Column("pong_timestamp", BigInteger))
         metadata.create_all(self.database)
-        self.webapp.add_get("/stats", self.stats)
-        self.webapp.add_get("/stats.json", self.stats_json)
-        self.webapp.add_get("/stats.raw.json", self.stats_raw_json)
-        self.stats_tpl = Template(resource_string("pingstat", "stats.html.j2").decode("utf-8"))
 
     def save_pong(self, pong: Pong) -> None:
         self.database.execute(self.pong.insert().values(
@@ -151,6 +147,7 @@ class PingStatBot(Plugin):
         return (f"{cls.plural(days, 'day')}, {cls.plural(hours, 'hour')},"
                 f"{cls.plural(minutes, 'minute')} and {cls.plural(seconds, 'second')}")
 
+    @web.get("/stats")
     async def stats(self, request: web.Request) -> web.Response:
         try:
             room_id = request.query["room_id"]
@@ -165,6 +162,7 @@ class PingStatBot(Plugin):
         return web.Response(status=200, content_type="text/html",
                             text=self.stats_tpl.render(**data, prettify_diff=self.prettify_diff))
 
+    @web.get("/stats.raw.json")
     async def stats_raw_json(self, request: web.Request) -> web.Response:
         try:
             room_id = request.query["room_id"]
@@ -179,6 +177,7 @@ class PingStatBot(Plugin):
                             text=json.dumps([pong._asdict() for pong in
                                              self.iter_pongs(room_id, max_age=max_age)]))
 
+    @web.get("/stats.json")
     async def stats_json(self, request: web.Request) -> web.Response:
         try:
             room_id = request.query["room_id"]
