@@ -16,10 +16,10 @@
 from typing import Tuple, Iterable, NamedTuple, Optional
 from pkg_resources import resource_string
 from statistics import median
-from aiohttp import web
 from time import time
 import json
 
+from aiohttp.web import Request, Response
 from sqlalchemy import Table, Column, MetaData, String, Integer, BigInteger, and_
 from jinja2 import Template
 
@@ -148,41 +148,41 @@ class PingStatBot(Plugin):
                 f"{cls.plural(minutes, 'minute')} and {cls.plural(seconds, 'second')}")
 
     @web.get("/stats")
-    async def stats(self, request: web.Request) -> web.Response:
+    async def stats(self, request: Request) -> Response:
         try:
             room_id = request.query["room_id"]
         except KeyError:
-            return web.Response(status=400,
+            return Response(status=400,
                                 text="Room ID query param missing\n" + str(request.rel_url))
         data = self.get_room_data(room_id)
         n = 1
         for ping in data["pings"].values():
             ping["n"] = n
             n += 1
-        return web.Response(status=200, content_type="text/html",
+        return Response(status=200, content_type="text/html",
                             text=self.stats_tpl.render(**data, prettify_diff=self.prettify_diff))
 
     @web.get("/stats.raw.json")
-    async def stats_raw_json(self, request: web.Request) -> web.Response:
+    async def stats_raw_json(self, request: Request) -> Response:
         try:
             room_id = request.query["room_id"]
         except KeyError:
-            return web.Response(status=400,
+            return Response(status=400,
                                 text="Room ID query param missing\n" + str(request.rel_url))
         try:
             max_age = int(request.query["max_age"]) * 1000
         except (KeyError, ValueError):
             max_age = 7 * 24 * 60 * 60 * 1000
-        return web.Response(status=200, content_type="application/json",
+        return Response(status=200, content_type="application/json",
                             text=json.dumps([pong._asdict() for pong in
                                              self.iter_pongs(room_id, max_age=max_age)]))
 
     @web.get("/stats.json")
-    async def stats_json(self, request: web.Request) -> web.Response:
+    async def stats_json(self, request: Request) -> Response:
         try:
             room_id = request.query["room_id"]
         except KeyError:
-            return web.Response(status=400,
+            return Response(status=400,
                                 text="Room ID query param missing\n" + str(request.rel_url))
         data = self.get_room_data(room_id)
-        return web.Response(status=200, content_type="application/json", text=json.dumps(data))
+        return Response(status=200, content_type="application/json", text=json.dumps(data))
