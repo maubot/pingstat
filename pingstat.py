@@ -57,7 +57,8 @@ class PingStatBot(Plugin):
     def iter_pongs(self, room_id: RoomID, max_age: int = 7 * 24 * 60 * 60 * 1000) -> Iterable[Pong]:
         rows = self.database.execute(self.pong.select().where(and_(
             self.pong.c.room_id == room_id,
-            self.pong.c.pong_timestamp >= int(time() * 1000) - max_age)))
+            self.pong.c.pong_timestamp >= int(time() * 1000) - max_age,
+            self.pong.c.pong_server != "half-shot.uk")))
         for row in rows:
             yield Pong(*row)
 
