@@ -54,10 +54,12 @@ class PingStatBot(Plugin):
             ping_server=pong.ping_server, receive_diff=pong.receive_diff,
             pong_timestamp=pong.pong_timestamp))
 
-    def iter_pongs(self, room_id: RoomID, max_age: int = 7 * 24 * 60 * 60 * 1000) -> Iterable[Pong]:
+    def iter_pongs(self, room_id: RoomID, max_age: int = 7 * 24 * 60 * 60 * 1000, max_diff: int = 10 * 60 * 1000, min_diff: int = 10) -> Iterable[Pong]:
         rows = self.database.execute(self.pong.select().where(and_(
             self.pong.c.room_id == room_id,
-            self.pong.c.pong_timestamp >= int(time() * 1000) - max_age)))
+            self.pong.c.pong_timestamp >= int(time() * 1000) - max_age,
+            self.pong.c.receive_diff <= max_diff,
+            self.pong.c.receive_diff >= min_diff)))
         for row in rows:
             yield Pong(*row)
 
