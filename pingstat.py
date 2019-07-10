@@ -63,7 +63,7 @@ class PingStatBot(Plugin):
         for row in rows:
             yield Pong(*row)
 
-    @command.passive(r"^@.+:.+: Pong! \(ping (\".+\")? took .+ to arrive\)$", msgtypes=(MessageType.NOTICE,))
+    @command.passive(r"^@.+:.+: Pong! \(ping (\".+\" )?took .+ to arrive\)$", msgtypes=(MessageType.NOTICE,))
     async def pong_handler(self, evt: MessageEvent, _: Tuple[str]) -> None:
         try:
             pong_data = evt.content["pong"]
