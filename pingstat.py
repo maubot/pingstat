@@ -13,11 +13,12 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Tuple, Iterable, NamedTuple, Optional
+from typing import Tuple, Iterable, Dict, Sequence, NamedTuple, Optional
 from pkg_resources import resource_string
 from statistics import median
 from time import time
 import json
+import math
 
 from aiohttp.web import Request, Response
 from sqlalchemy import Table, Column, MetaData, String, Integer, BigInteger, and_
@@ -30,6 +31,12 @@ from maubot.handlers import command, web
 
 Pong = NamedTuple("Pong", room_id=RoomID, ping_id=EventID, pong_server=str, ping_server=str,
                   receive_diff=int, pong_timestamp=int)
+
+SECOND = 1000
+MINUTE = 60 * SECOND
+HOUR = 60 * MINUTE
+DAY = 24 * HOUR
+WEEK = 7 * DAY
 
 
 class PingStatBot(Plugin):
@@ -48,22 +55,16 @@ class PingStatBot(Plugin):
                           Column("pong_timestamp", BigInteger))
         metadata.create_all(self.database)
 
+    # region Creating pong data
+
     def save_pong(self, pong: Pong) -> None:
         self.database.execute(self.pong.insert().values(
             room_id=pong.room_id, ping_id=pong.ping_id, pong_server=pong.pong_server,
             ping_server=pong.ping_server, receive_diff=pong.receive_diff,
             pong_timestamp=pong.pong_timestamp))
 
-    def iter_pongs(self, room_id: RoomID, max_age: int = 7 * 24 * 60 * 60 * 1000, max_diff: int = 10 * 60 * 1000, min_diff: int = 10) -> Iterable[Pong]:
-        rows = self.database.execute(self.pong.select().where(and_(
-            self.pong.c.room_id == room_id,
-            self.pong.c.pong_timestamp >= int(time() * 1000) - max_age,
-            self.pong.c.receive_diff <= max_diff,
-            self.pong.c.receive_diff >= min_diff)))
-        for row in rows:
-            yield Pong(*row)
-
-    @command.passive(r"^@.+:.+: Pong! \(ping (\".+\" )?took .+ to arrive\)$", msgtypes=(MessageType.NOTICE,))
+    @command.passive(r"^@.+:.+: Pong! \(ping (\".+\" )?took .+ to arrive\)$",
+                     msgtypes=(MessageType.NOTICE,))
     async def pong_handler(self, evt: MessageEvent, _: Tuple[str]) -> None:
         try:
             pong_data = evt.content["pong"]
@@ -87,10 +88,29 @@ class PingStatBot(Plugin):
         self.save_pong(pong)
         await evt.mark_read()
 
-    def get_room_data(self, room_id: RoomID) -> dict:
+    # endregion
+    # region Getting pong data
+
+    def iter_pongs(self, room_id: RoomID, max_age: int = WEEK, min_age: int = 0,
+                   max_diff: int = 10 * MINUTE, min_diff: int = 10) -> Iterable[Pong]:
+        now = int(time() * 1000)
+        rows = self.database.execute(self.pong.select().where(and_(
+            self.pong.c.room_id == room_id,
+            self.pong.c.pong_timestamp <= now - min_age,
+            self.pong.c.pong_timestamp >= now - max_age,
+            self.pong.c.receive_diff <= max_diff,
+            self.pong.c.receive_diff >= min_diff)))
+        for row in rows:
+            yield Pong(*row)
+
+    @staticmethod
+    def geomean(data: Sequence[int]) -> float:
+        return math.exp(math.fsum(math.log(elem) for elem in data) / len(data))
+
+    def get_room_data(self, room_id: RoomID, min_age: int, max_age: int) -> dict:
         data = {}
         pongservers = set()
-        for pong in self.iter_pongs(room_id):
+        for pong in self.iter_pongs(room_id, min_age=min_age, max_age=max_age):
             pongservers.add(pong.pong_server)
             ping_server_data = data.setdefault(pong.ping_server,
                                                {"pongs": {}, "pings": set()})
@@ -111,18 +131,23 @@ class PingStatBot(Plugin):
                 pong_server["mean"] = pong_server["sum"] / len(pong_server["diffs"])
                 server_diffs = pong_server["diffs"].values()
                 pong_server["median"] = median(server_diffs)
+                pong_server["gmean"] = self.geomean(server_diffs)
                 diffs += server_diffs
                 del pong_server["sum"]
             ping_server["mean"] = total_sum / total_len
             ping_server["median"] = median(diffs)
+            ping_server["gmean"] = self.geomean(diffs)
 
-        data = dict(sorted(data.items(), key=lambda kv: kv[1]["median"]))
+        data = dict(sorted(data.items(), key=lambda kv: kv[1]["gmean"]))
         return {
             "pings": data,
             "mean": (sum(ping_server["mean"] for ping_server in data.values()) / len(data)
                      if len(data) > 0 else 0),
             "pongservers": sorted(list(pongservers))
         }
+
+    # endregion
+    # region Rendering helpers
 
     @staticmethod
     def plural(num: float, unit: str, decimals: Optional[int] = None) -> str:
@@ -149,42 +174,73 @@ class PingStatBot(Plugin):
         return (f"{cls.plural(days, 'day')}, {cls.plural(hours, 'hour')},"
                 f"{cls.plural(minutes, 'minute')} and {cls.plural(seconds, 'second')}")
 
-    @web.get("/stats")
-    async def stats(self, request: Request) -> Response:
+    # endregion
+    # region HTTP endpoints
+
+    @staticmethod
+    def _get_min_max_age(request: Request, max_delta: int = WEEK) -> Dict[str, int]:
         try:
-            room_id = request.query["room_id"]
+            max_age = int(request.query["max_age"]) * 1000
+        except (KeyError, ValueError):
+            max_age = WEEK
+        try:
+            min_age = int(request.query["min_age"]) * 1000
+        except (KeyError, ValueError):
+            min_age = 0
+        if 0 < max_delta < max_age - min_age:
+            max_age = min_age + max_delta
+        return {
+            "min_age": min_age,
+            "max_age": max_age,
+        }
+
+    @web.get("/{room_id}/stats")
+    async def stats(self, request: Request, force_json: bool = False) -> Response:
+        try:
+            room_id = RoomID(request.match_info["room_id"])
         except KeyError:
-            return Response(status=400,
-                                text="Room ID query param missing\n" + str(request.rel_url))
-        data = self.get_room_data(room_id)
+            return Response(status=404, text="Room ID missing")
+        data = self.get_room_data(room_id, **self._get_min_max_age(request))
+        if "application/json" in request.headers.get("Accept", "") or force_json:
+            return Response(status=200, content_type="application/json", text=json.dumps(data))
         n = 1
         for ping in data["pings"].values():
             ping["n"] = n
             n += 1
         return Response(status=200, content_type="text/html",
-                            text=self.stats_tpl.render(**data, prettify_diff=self.prettify_diff))
+                        text=self.stats_tpl.render(**data, prettify_diff=self.prettify_diff))
 
-    @web.get("/stats.raw.json")
+    @web.get("/{room_id}/stats.json")
+    async def stats_json(self, request: Request) -> Response:
+        return await self.stats(request, force_json=True)
+
+    @web.get("/{room_id}/stats.raw.json")
     async def stats_raw_json(self, request: Request) -> Response:
         try:
+            room_id = RoomID(request.query["room_id"])
+        except KeyError:
+            return Response(status=404, text="Room ID missing")
+        return Response(status=200, content_type="application/json",
+                        text=json.dumps([pong._asdict() for pong in self.iter_pongs(
+                            room_id, **self._get_min_max_age(request, 0))]))
+
+    # region Legacy endpoints
+
+    @web.get("/stats")
+    async def old_stats(self, request: Request, fmt: str = "") -> Response:
+        try:
             room_id = request.query["room_id"]
         except KeyError:
-            return Response(status=400,
-                                text="Room ID query param missing\n" + str(request.rel_url))
-        try:
-            max_age = int(request.query["max_age"]) * 1000
-        except (KeyError, ValueError):
-            max_age = 7 * 24 * 60 * 60 * 1000
-        return Response(status=200, content_type="application/json",
-                            text=json.dumps([pong._asdict() for pong in
-                                             self.iter_pongs(room_id, max_age=max_age)]))
+            return Response(status=400, text="Room ID query param missing")
+        return Response(status=302, headers={"Location": f"{room_id}/stats{fmt}"})
 
     @web.get("/stats.json")
-    async def stats_json(self, request: Request) -> Response:
-        try:
-            room_id = request.query["room_id"]
-        except KeyError:
-            return Response(status=400,
-                                text="Room ID query param missing\n" + str(request.rel_url))
-        data = self.get_room_data(room_id)
-        return Response(status=200, content_type="application/json", text=json.dumps(data))
+    async def old_stats_json(self, request: Request) -> Response:
+        return await self.old_stats(request, fmt=".json")
+
+    @web.get("/stats.raw.json")
+    async def old_stats_raw_json(self, request: Request) -> Response:
+        return await self.old_stats(request, fmt=".raw.json")
+
+    # endregion
+    # endregion
