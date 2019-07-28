@@ -1,0 +1,22 @@
+image: dock.mau.dev/maubot/maubot
+
+stages:
+- build
+
+artifacts:
+  paths:
+  - *.mbp
+
+build:
+  stage: build
+  except:
+  - tags
+  script:
+  - mbc build -o xyz.maubot.$CI_PROJECT_NAME-$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA.mbp
+
+build tags:
+  stage: build
+  only:
+  - tags
+  script:
+  mbc build -o xyz.maubot.$CI_PROJECT_NAME-$CI_COMMIT_TAG.mbp
