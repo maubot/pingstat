@@ -138,7 +138,7 @@ class PingStatBot(Plugin):
             ping_server["median"] = median(diffs)
             ping_server["gmean"] = self.geomean(diffs)
 
-        data = dict(sorted(data.items(), key=lambda kv: kv[1]["gmean"]))
+        data = dict(sorted(data.items(), key=lambda kv: kv[1]["median"]))
         return {
             "pings": data,
             "mean": (sum(ping_server["mean"] for ping_server in data.values()) / len(data)

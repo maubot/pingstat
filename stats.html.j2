@@ -54,8 +54,8 @@
             <tr>
                 <th rowspan="2">#</th>
                 <th rowspan="2">Ping server</th>
-                <th rowspan="2">Geom. mean</th>
                 <th rowspan="2">Median</th>
+                <th rowspan="2">Geom. mean</th>
                 <th rowspan="2">Mean</th>
                 <th rowspan="2">N</th>
                 <th colspan="{{ pongservers|length }}">Pong server (mean)</th>
@@ -71,8 +71,8 @@
                 <tr>
                     <th>{{ ping_server_data.n }}</th>
                     <th>{{ server }}</th>
-                    <td>{{ prettify_diff(ping_server_data.gmean) }}</td>
                     <td>{{ prettify_diff(ping_server_data.median) }}</td>
+                    <td>{{ prettify_diff(ping_server_data.gmean) }}</td>
                     <td>{{ prettify_diff(ping_server_data.mean) }}</td>
                     <td>{{ ping_server_data.pings|length }}</td>
                     {% for pongserver in pongservers %}
