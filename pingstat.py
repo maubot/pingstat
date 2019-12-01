@@ -24,10 +24,10 @@ from aiohttp.web import Request, Response
 from sqlalchemy import Table, Column, MetaData, String, Integer, BigInteger, and_
 from jinja2 import Template
 
-from mautrix.types import MessageType, RoomID, EventID
+from mautrix.types import MessageType, RoomID, EventID, EventType, StateEvent
 
 from maubot import Plugin, MessageEvent
-from maubot.handlers import command, web
+from maubot.handlers import command, web, event
 
 Pong = NamedTuple("Pong", room_id=RoomID, ping_id=EventID, pong_server=str, ping_server=str,
                   receive_diff=int, pong_timestamp=int)
@@ -87,6 +87,14 @@ class PingStatBot(Plugin):
                     receive_diff=diff, pong_timestamp=evt.timestamp)
         self.save_pong(pong)
         await evt.mark_read()
+
+    @event.on(EventType.ROOM_TOMBSTONE)
+    async def tombstone(self, evt: StateEvent) -> None:
+        if not evt.content.replacement_room:
+            return
+        self.database.execute(self.pong.update()
+                              .where(self.pong.room_id == evt.room_id)
+                              .values(room_id=evt.content.replacement_room))
 
     # endregion
     # region Getting pong data
