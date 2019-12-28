@@ -93,7 +93,7 @@ class PingStatBot(Plugin):
         if not evt.content.replacement_room:
             return
         self.database.execute(self.pong.update()
-                              .where(self.pong.room_id == evt.room_id)
+                              .where(self.pong.c.room_id == evt.room_id)
                               .values(room_id=evt.content.replacement_room))
 
     # endregion
