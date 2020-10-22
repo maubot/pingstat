@@ -39,6 +39,13 @@ DAY = 24 * HOUR
 WEEK = 7 * DAY
 
 
+# TODO make configurable?
+default_disclaimer = "Please note that ping times may not be representative of homeserver performance."
+disclaimers = {
+  "!ping-no-synapse:maunium.net": f"{default_disclaimer} This room includes work-in-progress homeserver implementations, which may implement some parts of Matrix in way that is faster, but not spec-compliant and could cause other problems."
+}
+
+
 class PingStatBot(Plugin):
     stats_tpl: Template = Template(resource_string("pingstat", "stats.html.j2").decode("utf-8"))
     pong: Table
@@ -148,6 +155,7 @@ class PingStatBot(Plugin):
 
         data = dict(sorted(data.items(), key=lambda kv: kv[1]["median"]))
         return {
+            "disclaimer": disclaimers.get(room_id, default_disclaimer),
             "pings": data,
             "mean": (sum(ping_server["mean"] for ping_server in data.values()) / len(data)
                      if len(data) > 0 else 0),
@@ -225,7 +233,7 @@ class PingStatBot(Plugin):
     @web.get("/{room_id}/stats.raw.json")
     async def stats_raw_json(self, request: Request) -> Response:
         try:
-            room_id = RoomID(request.query["room_id"])
+            room_id = RoomID(request.match_info["room_id"])
         except KeyError:
             return Response(status=404, text="Room ID missing")
         return Response(status=200, content_type="application/json",
