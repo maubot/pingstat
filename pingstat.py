@@ -14,6 +14,8 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Tuple, Iterable, Dict, Sequence, NamedTuple, Optional
+
+from mautrix.client.api.rooms import RoomMethods
 from pkg_resources import resource_string
 from statistics import median
 from time import time
@@ -24,7 +26,7 @@ from aiohttp.web import Request, Response
 from sqlalchemy import Table, Column, MetaData, String, Integer, BigInteger, and_
 from jinja2 import Template
 
-from mautrix.types import MessageType, RoomID, EventID, EventType, StateEvent
+from mautrix.types import MessageType, RoomID, EventID, EventType, StateEvent, StateEventContent, UserID
 
 from maubot import Plugin, MessageEvent
 from maubot.handlers import command, web, event
@@ -69,6 +71,19 @@ class PingStatBot(Plugin):
             room_id=pong.room_id, ping_id=pong.ping_id, pong_server=pong.pong_server,
             ping_server=pong.ping_server, receive_diff=pong.receive_diff,
             pong_timestamp=pong.pong_timestamp))
+
+    @command.new("reset", help="Reset statistics")
+    async def reset(self, evt: MessageEvent):
+        room_methods = RoomMethods(api=self.client.api)
+        current_state: StateEventContent = await room_methods.get_state_event(
+            evt.room_id, EventType.ROOM_POWER_LEVELS
+        )
+        current_power_levels: dict[UserID, int] = current_state["users"]
+        if current_power_levels.get(UserID(evt.sender), 0) >= 50:
+            self.database.execute(self.pong.delete().where(self.pong.c.room_id == evt.room_id))
+            await evt.react("✅")
+        else:
+            await evt.react("❌")
 
     @command.passive(r"^@.+:.+: Pong! \(ping (\".+\" )?took .+ to arrive\)$",
                      msgtypes=(MessageType.NOTICE,))
