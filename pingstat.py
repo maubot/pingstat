@@ -14,6 +14,8 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Tuple, Iterable, Dict, Sequence, NamedTuple, Optional
+
+from mautrix.client.api.rooms import RoomMethods
 from pkg_resources import resource_string
 from statistics import median
 from time import time
@@ -24,10 +26,12 @@ from aiohttp.web import Request, Response
 from sqlalchemy import Table, Column, MetaData, String, Integer, BigInteger, and_
 from jinja2 import Template
 
-from mautrix.types import MessageType, RoomID, EventID, EventType, StateEvent
+from mautrix.types import MessageType, RoomID, EventID, EventType, StateEvent, StateEventContent, UserID
 
 from maubot import Plugin, MessageEvent
 from maubot.handlers import command, web, event
+from pyvis.network import Network
+
 
 Pong = NamedTuple("Pong", room_id=RoomID, ping_id=EventID, pong_server=str, ping_server=str,
                   receive_diff=int, pong_timestamp=int)
@@ -69,6 +73,19 @@ class PingStatBot(Plugin):
             room_id=pong.room_id, ping_id=pong.ping_id, pong_server=pong.pong_server,
             ping_server=pong.ping_server, receive_diff=pong.receive_diff,
             pong_timestamp=pong.pong_timestamp))
+
+    @command.new("reset", help="Reset statistics")
+    async def reset(self, evt: MessageEvent):
+        room_methods = RoomMethods(api=self.client.api)
+        current_state: StateEventContent = await room_methods.get_state_event(
+            evt.room_id, EventType.ROOM_POWER_LEVELS
+        )
+        current_power_levels: dict[UserID, int] = current_state["users"]
+        if current_power_levels.get(UserID(evt.sender), 0) >= 50:
+            self.database.execute(self.pong.delete().where(self.pong.c.room_id == evt.room_id))
+            await evt.react("✅")
+        else:
+            await evt.react("❌")
 
     @command.passive(r"^@.+:.+: Pong! \(ping (\".+\" )?took .+ to arrive\)$",
                      msgtypes=(MessageType.NOTICE,))
@@ -225,6 +242,47 @@ class PingStatBot(Plugin):
             n += 1
         return Response(status=200, content_type="text/html",
                         text=self.stats_tpl.render(**data, prettify_diff=self.prettify_diff))
+
+    @web.get("/{room_id}/graph")
+    async def graph(self, request: Request) -> Response:
+        try:
+            room_id = RoomID(request.match_info["room_id"])
+        except KeyError:
+            return Response(status=404, text="Room ID missing")
+        data = self.get_room_data(room_id, **self._get_min_max_age(request))
+
+        g = Network(height="100%", width="100%", bgcolor="#222222", font_color="white", directed =True)
+        n_color_normal = "#97c2fc"
+        n_color_inactive = "#dfedff"
+
+        # All nodes need to exist before edges can be added
+        for server, server_values in data.get("pings").items():
+            g.add_node(server,
+                       title=str(server_values.get("median")),
+                       color=n_color_normal,
+                       mass=server_values.get("median")/10
+                       )
+
+            for pong, pong_values in server_values.get("pongs").items():
+                server_median = data.get("pings").get(pong)
+                if server_median:
+                    g.add_node(pong,
+                               title=str(server_median.get("median")),
+                               color=n_color_normal,
+                               mass=server_median.get("median")/10
+                               )
+                else:
+                    g.add_node(pong,
+                               title="No ping sent from this server.",
+                               color=n_color_inactive
+                               )
+                # self.log.info(f"Title: {title}")
+                g.add_edge(server, pong, weight=pong_values.get("gmean"), title=str(pong_values.get("gmean")))
+
+        g.barnes_hut()
+        # g.show_buttons(filter_=['physics'])
+        html = g.generate_html()
+        return Response(status=200, content_type="text/html", text=html)
 
     @web.get("/{room_id}/stats.json")
     async def stats_json(self, request: Request) -> Response:
