@@ -30,6 +30,8 @@ from mautrix.types import MessageType, RoomID, EventID, EventType, StateEvent, S
 
 from maubot import Plugin, MessageEvent
 from maubot.handlers import command, web, event
+from pyvis.network import Network
+
 
 Pong = NamedTuple("Pong", room_id=RoomID, ping_id=EventID, pong_server=str, ping_server=str,
                   receive_diff=int, pong_timestamp=int)
@@ -240,6 +242,47 @@ class PingStatBot(Plugin):
             n += 1
         return Response(status=200, content_type="text/html",
                         text=self.stats_tpl.render(**data, prettify_diff=self.prettify_diff))
+
+    @web.get("/{room_id}/graph")
+    async def graph(self, request: Request) -> Response:
+        try:
+            room_id = RoomID(request.match_info["room_id"])
+        except KeyError:
+            return Response(status=404, text="Room ID missing")
+        data = self.get_room_data(room_id, **self._get_min_max_age(request))
+
+        g = Network(height="100%", width="100%", bgcolor="#222222", font_color="white", directed =True)
+        n_color_normal = "#97c2fc"
+        n_color_inactive = "#dfedff"
+
+        # All nodes need to exist before edges can be added
+        for server, server_values in data.get("pings").items():
+            g.add_node(server,
+                       title=str(server_values.get("median")),
+                       color=n_color_normal,
+                       mass=server_values.get("median")/10
+                       )
+
+            for pong, pong_values in server_values.get("pongs").items():
+                server_median = data.get("pings").get(pong)
+                if server_median:
+                    g.add_node(pong,
+                               title=str(server_median.get("median")),
+                               color=n_color_normal,
+                               mass=server_median.get("median")/10
+                               )
+                else:
+                    g.add_node(pong,
+                               title="No ping sent from this server.",
+                               color=n_color_inactive
+                               )
+                # self.log.info(f"Title: {title}")
+                g.add_edge(server, pong, weight=pong_values.get("gmean"), title=str(pong_values.get("gmean")))
+
+        g.barnes_hut()
+        # g.show_buttons(filter_=['physics'])
+        html = g.generate_html()
+        return Response(status=200, content_type="text/html", text=html)
 
     @web.get("/{room_id}/stats.json")
     async def stats_json(self, request: Request) -> Response:
