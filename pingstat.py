@@ -13,6 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+import asyncio
 from typing import Tuple, Iterable, Dict, Sequence, NamedTuple, Optional
 from pkg_resources import resource_string
 from statistics import median
@@ -24,7 +25,7 @@ from aiohttp.web import Request, Response
 from sqlalchemy import Table, Column, MetaData, String, Integer, BigInteger, and_
 from jinja2 import Template
 
-from mautrix.types import MessageType, RoomID, EventID, EventType, StateEvent
+from mautrix.types import MessageType, RoomID, EventID, EventType, StateEvent, PaginationDirection, RelatesTo, InReplyTo, TextMessageEventContent
 
 from maubot import Plugin, MessageEvent
 from maubot.handlers import command, web, event
@@ -69,6 +70,54 @@ class PingStatBot(Plugin):
             room_id=pong.room_id, ping_id=pong.ping_id, pong_server=pong.pong_server,
             ping_server=pong.ping_server, receive_diff=pong.receive_diff,
             pong_timestamp=pong.pong_timestamp))
+
+    @command.new("cleanup", aliases=["extremitycount", "extremity-count"], help="Clean up forward extremities")
+    async def extremity_count(self, evt: MessageEvent) -> None:
+        count = 2
+        done_half = False
+        done = False
+        event_id = evt.event_id
+        loops = 10
+        while not done and loops > 0:
+            loops -= 1
+            try:
+                messages = await self.client.get_messages(
+                    room_id=evt.room_id,
+                    direction=PaginationDirection.BACKWARD,
+                    limit=1,
+                    filter_json={"event_format": "federation"},
+                )
+                count = len(messages.events[0]["prev_events"])
+            except Exception:
+                self.log.exception("Error getting prev event count")
+                await evt.reply("Error 😿")
+            else:
+                if count == 1:
+                    if done_half:
+                        done = True
+                    else:
+                        done_half = True
+                else:
+                    done_half = False
+                if loops < 9 and not done:
+                    await asyncio.sleep(3)
+                if 0 <= count < 10:
+                    count_str = f"{count}\ufe0f\u20e3"
+                elif count == 10:
+                    count_str = "\U0001f51f"
+                elif count == 100:
+                    count_str = "\U0001f4af"
+                else:
+                    count_str = str(count)
+                content = TextMessageEventContent(
+                    msgtype=MessageType.NOTICE,
+                    body=count_str,
+                    relates_to=RelatesTo(in_reply_to=InReplyTo(event_id=event_id))
+                )
+                event_id = await self.client.send_message(evt.room_id, content)
+        if not loops:
+            await evt.reply("Too many extremities")
+
 
     @command.passive(r"^@.+:.+: Pong! \(ping (\".+\" )?took .+ to arrive\)$",
                      msgtypes=(MessageType.NOTICE,))
