@@ -87,6 +87,8 @@ class PingStatBot(Plugin):
                     limit=1,
                     filter_json={"event_format": "federation"},
                 )
+                if len(messages.events) == 0:
+                    return await evt.reply('No messages found? <img src="mxc://tastytea.de/mWbqIglCwfLCgrOWjrSBQNco" alt=":blobcat_monocle:" title="Blobcat with monocle and tophat" data-mx-emoticon="" height="32">', allow_html=True)
                 count = len(messages.events[0]["prev_events"])
             except Exception:
                 self.log.exception("Error getting prev event count")
