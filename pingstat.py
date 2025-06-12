@@ -158,7 +158,7 @@ class PingStatBot(Plugin):
     # region Getting pong data
 
     def iter_pongs(self, room_id: RoomID, max_age: int = WEEK, min_age: int = 0,
-                   max_diff: int = 10 * MINUTE, min_diff: int = 10) -> Iterable[Pong]:
+                   max_diff: int = 10 * MINUTE, min_diff: int = 1) -> Iterable[Pong]:
         now = int(time() * 1000)
         rows = self.database.execute(self.pong.select().where(and_(
             self.pong.c.room_id == room_id,
